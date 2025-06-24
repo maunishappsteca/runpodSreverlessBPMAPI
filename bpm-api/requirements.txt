@@ -1,5 +1,0 @@
-flask
-librosa
-numpy
-soundfile
-runpod
