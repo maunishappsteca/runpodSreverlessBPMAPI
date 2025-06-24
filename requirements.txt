@@ -1,4 +1,5 @@
-flask
+Flask
+boto3
 librosa
 soundfile
 numpy
