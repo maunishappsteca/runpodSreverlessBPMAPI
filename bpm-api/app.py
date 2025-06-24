@@ -38,8 +38,9 @@ def analyze_bpm():
         if os.path.exists(file_path):
             os.remove(file_path)
 
-# RunPod Serverless entry point
-runpod.serverless.start({"app": app})
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
 
 
 
