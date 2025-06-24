@@ -1,7 +1,13 @@
+import os
+from dotenv import load_dotenv # Add this line
+
+load_dotenv() # Load environment variables from .env file
+
+
 import boto3
 from flask import Flask, request, jsonify
 import librosa
-import os
+
 import uuid
 import soundfile as sf
 import runpod # Import the runpod library
@@ -11,9 +17,9 @@ app = Flask(__name__)
 # --- Configuration (IMPORTANT for Deployment) ---
 # It's best practice to get sensitive info from environment variables
 # For local testing, you can set these in your terminal or .env file
-S3_BUCKET = os.environ.get('vocal-remover-runpod-version')
-AWS_ACCESS_KEY_ID = os.environ.get('AKIA6GBMECDSPFX2QM3B')
-AWS_SECRET_ACCESS_KEY = os.environ.get('0R7tBXYsTfuNWPi82Q0+glrSlu0l4Bl1GuYiTrOp')
+S3_BUCKET = os.environ.get('S3_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1') # Default region
 
 # Initialize S3 client (ensure credentials are available in the environment
@@ -50,7 +56,7 @@ def process_audio_for_bpm(s3_file_path):
         # Load audio and estimate BPM
         y, sr = librosa.load(local_file_path, sr=None, mono=True)
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        
+
         return {"bpm": round(float(tempo), 2)}
 
     except Exception as e:
