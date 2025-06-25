@@ -3,7 +3,6 @@ from dotenv import load_dotenv # Add this line
 
 load_dotenv() # Load environment variables from .env file
 
-
 import boto3
 from flask import Flask, request, jsonify
 import librosa
@@ -20,7 +19,7 @@ app = Flask(__name__)
 S3_BUCKET = os.environ.get('S3_BUCKET_NAME')
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_REGION = os.environ.get('AWS_REGION', 'us-east-2') # Default region
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1') # Default region
 
 # Initialize S3 client (ensure credentials are available in the environment
 # or via an IAM role when deployed on RunPod)
