@@ -72,6 +72,9 @@ def process_audio_for_bpm(s3_file_path):
         tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
         print(f"INFO: BPM estimation complete. Raw tempo: {tempo}.")
 
+        if tempo > 100:
+            tempo /= 2
+            
         return {"bpm": round(float(tempo), 2)}
 
     except Exception as e:
