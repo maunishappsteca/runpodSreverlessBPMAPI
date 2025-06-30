@@ -51,44 +51,107 @@ print(f"INFO: Uploads directory '{UPLOAD_FOLDER}' ensured.")
 def process_audio_for_bpm(s3_file_path):
     print(f"INFO: Starting process_audio_for_bpm for path: {s3_file_path}")
     if not S3_BUCKET or not s3_client:
-        print("ERROR: S3 bucket name or client not configured when calling process_audio_for_bpm.", file=sys.stderr)
+        print("ERROR: S3 bucket name or client not configured.", file=sys.stderr)
         raise ValueError("S3 bucket or client not configured.")
 
     filename = os.path.basename(s3_file_path)
     local_file_path = os.path.join(UPLOAD_FOLDER, filename)
 
     try:
-        # Download the file from S3
-        print(f"INFO: Attempting to download '{s3_file_path}' from S3 bucket '{S3_BUCKET}' to '{local_file_path}'...")
+        # Step 1: Download audio from S3
         s3_client.download_file(S3_BUCKET, s3_file_path, local_file_path)
-        print(f"INFO: Download of '{filename}' complete.")
+        print(f"INFO: Downloaded '{filename}' to '{local_file_path}'")
 
-        # Load audio and estimate BPM
-        print(f"INFO: Loading audio file '{local_file_path}' with librosa...")
+        # Step 2: Load audio
         y, sr = librosa.load(local_file_path, sr=None, mono=True)
-        print(f"INFO: Audio loaded. Sample rate: {sr}, duration: {len(y)/sr:.2f} seconds.")
+        duration = len(y) / sr
 
-        print("INFO: Estimating BPM using librosa.beat.beat_track...")
-        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-        print(f"INFO: BPM estimation complete. Raw tempo: {tempo}.")
-
+        # Step 3: Estimate BPM
+        tempo = librosa.beat.tempo(y=y, sr=sr)
+        tempo = tempo[0] if isinstance(tempo, np.ndarray) else tempo
         if tempo > 100:
             tempo /= 2
-            
-        return {"bpm": round(float(tempo), 2)}
+        tempo = round(float(tempo), 2)
+
+        # Step 4: Generate note time arrays
+        def create_time_grid(start, end, divisions_per_measure=4):
+            beat_len = 60.0 / tempo
+            measure_len = beat_len * 4
+            total_measures = (end - start) / measure_len
+            times = []
+            for m in range(int(total_measures) + 1):
+                for div in range(divisions_per_measure):
+                    t = start + m * measure_len + (div * measure_len / divisions_per_measure)
+                    if t <= end:
+                        times.append(round(t, 4))
+            return np.array(times)
+
+        whole_notes = create_time_grid(0, duration, 1)
+        half_notes = create_time_grid(0, duration, 2)
+        quarter_notes = create_time_grid(0, duration, 4)
+        eighth_notes = create_time_grid(0, duration, 8)
+        sixteenth_notes = create_time_grid(0, duration, 16)
+
+        # Step 5: Tick overlay function
+        def add_ticks(audio, times, note_type, volume=1.0):
+            freq = 800
+            duration_map = {
+                'whole': 0.15, 'half': 0.12,
+                'quarter': 0.1, 'eighth': 0.08, 'sixteenth': 0.06
+            }
+            tick_duration = int(duration_map[note_type] * sr)
+            ticks = np.zeros_like(audio)
+            for t in times:
+                start = int(t * sr)
+                end = min(start + tick_duration, len(audio))
+                tick = volume * np.sin(2 * np.pi * freq * np.arange(end - start) / sr)
+                ticks[start:end] = tick * np.linspace(1, 0, end - start)
+            return audio + ticks
+
+        # Step 6: Create and save ticked audio
+        file_map = {}
+        time_map = {
+            "whole_notes": ("whole", whole_notes),
+            "half_notes": ("half", half_notes),
+            "quarter_notes": ("quarter", quarter_notes),
+            "eighth_notes": ("eighth", eighth_notes),
+            "sixteenth_notes": ("sixteenth", sixteenth_notes)
+        }
+
+        for key, (note_type, times) in time_map.items():
+            ticked_audio = add_ticks(y.copy(), times, note_type)
+            out_path = os.path.join(UPLOAD_FOLDER, f"{key}.wav")
+            sf.write(out_path, ticked_audio, sr)
+            file_map[key] = f"{key}.wav"
+
+        print("INFO: BPM and tick sounds processing complete.")
+
+        return {
+            "bpm": tempo,
+            "note_sounds": file_map,
+            "note_timings": {
+                "whole_notes": whole_notes.tolist(),
+                "half_notes": half_notes.tolist(),
+                "quarter_notes": quarter_notes.tolist(),
+                "eighth_notes": eighth_notes.tolist(),
+                "sixteenth_notes": sixteenth_notes.tolist()
+            }
+        }
 
     except Exception as e:
-        print(f"ERROR: An error occurred during audio processing for '{s3_file_path}'.", file=sys.stderr)
+        print(f"ERROR: Exception during audio processing: {e}", file=sys.stderr)
         import traceback
-        traceback.print_exc() # Print full traceback for debugging in logs
-        raise e # Re-raise the exception to be caught by the caller/handler
+        traceback.print_exc()
+        raise e
     finally:
-        # Clean up
-        if os.path.exists(local_file_path):
-            os.remove(local_file_path)
-            print(f"INFO: Cleaned up temporary file: {local_file_path}")
-        else:
-            print(f"INFO: Temporary file '{local_file_path}' not found for cleanup (might not have been created or already removed).")
+        # Clean up downloaded and generated files
+        for f in [local_file_path] + [os.path.join(UPLOAD_FOLDER, f"{k}.wav") for k in time_map]:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+                    print(f"INFO: Deleted temporary file: {f}")
+            except Exception as cleanup_err:
+                print(f"WARNING: Failed to delete {f}: {cleanup_err}", file=sys.stderr)
 
 
 # --- Flask Route for Local Development/Testing (Optional) ---
