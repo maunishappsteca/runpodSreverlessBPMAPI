@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv # Add this line
 import sys # Import sys for stderr printing
 
+import numpy as np
+
 load_dotenv() # Load environment variables from .env file
 
 import boto3
