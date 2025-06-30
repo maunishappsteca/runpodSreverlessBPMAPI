@@ -57,10 +57,7 @@ def process_audio_for_bpm(s3_file_path):
         raise ValueError("S3 bucket or client not configured.")
 
     filename = os.path.basename(s3_file_path)
-    name_only = os.path.splitext(os.path.basename(s3_file_path))[0]
     local_file_path = os.path.join(UPLOAD_FOLDER, filename)
-
-    # ✅ Move this here — before the try block so it's always defined
     temp_files = [local_file_path]
 
     try:
@@ -92,57 +89,14 @@ def process_audio_for_bpm(s3_file_path):
                         times.append(round(t, 4))
             return np.array(times)
 
-        whole_notes = create_time_grid(0, duration, 1)
-        half_notes = create_time_grid(0, duration, 2)
-        quarter_notes = create_time_grid(0, duration, 4)
-        eighth_notes = create_time_grid(0, duration, 8)
-        sixteenth_notes = create_time_grid(0, duration, 16)
-
-        # Step 5: Tick overlay function
-        def add_ticks(audio, times, note_type, volume=1.0):
-            freq = 800
-            duration_map = {
-                'whole': 0.15, 'half': 0.12,
-                'quarter': 0.1, 'eighth': 0.08, 'sixteenth': 0.06
-            }
-            tick_duration = int(duration_map[note_type] * sr)
-            ticks = np.zeros_like(audio)
-            for t in times:
-                start = int(t * sr)
-                end = min(start + tick_duration, len(audio))
-                tick = volume * np.sin(2 * np.pi * freq * np.arange(end - start) / sr)
-                ticks[start:end] = tick * np.linspace(1, 0, end - start)
-            return audio + ticks
-
-        # Step 6: Create and save ticked audio
-        file_map = {}
-        time_map = {
-            "whole_notes": ("whole", whole_notes),
-            "half_notes": ("half", half_notes),
-            "quarter_notes": ("quarter", quarter_notes),
-            "eighth_notes": ("eighth", eighth_notes),
-            "sixteenth_notes": ("sixteenth", sixteenth_notes)
-        }
-
-        for key, (note_type, times) in time_map.items():
-            out_filename = f"{name_only}_{key}.wav"
-            out_path = os.path.join(UPLOAD_FOLDER, out_filename)
-            ticked_audio = add_ticks(y.copy(), times, note_type)
-            sf.write(out_path, ticked_audio, sr)
-            file_map[key] = out_filename
-            temp_files.append(out_path)
-
-        print("INFO: BPM and tick sounds processing complete.")
-
         return {
             "bpm": tempo,
-            "note_sounds": file_map,
             "note_timings": {
-                "whole_notes": whole_notes.tolist(),
-                "half_notes": half_notes.tolist(),
-                "quarter_notes": quarter_notes.tolist(),
-                "eighth_notes": eighth_notes.tolist(),
-                "sixteenth_notes": sixteenth_notes.tolist()
+                "whole_notes": create_time_grid(0, duration, 1).tolist(),
+                "half_notes": create_time_grid(0, duration, 2).tolist(),
+                "quarter_notes": create_time_grid(0, duration, 4).tolist(),
+                "eighth_notes": create_time_grid(0, duration, 8).tolist(),
+                "sixteenth_notes": create_time_grid(0, duration, 16).tolist()
             }
         }
 
@@ -160,6 +114,7 @@ def process_audio_for_bpm(s3_file_path):
                     print(f"INFO: Deleted temporary file: {f}")
             except Exception as cleanup_err:
                 print(f"WARNING: Failed to delete {f}: {cleanup_err}", file=sys.stderr)
+
 
 
 
