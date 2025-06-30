@@ -58,6 +58,9 @@ def process_audio_for_bpm(s3_file_path):
     name_only = os.path.splitext(os.path.basename(s3_file_path))[0]
     local_file_path = os.path.join(UPLOAD_FOLDER, filename)
 
+    # ✅ Move this here — before the try block so it's always defined
+    temp_files = [local_file_path]
+
     try:
         # Step 1: Download audio from S3
         s3_client.download_file(S3_BUCKET, s3_file_path, local_file_path)
@@ -119,7 +122,6 @@ def process_audio_for_bpm(s3_file_path):
             "sixteenth_notes": ("sixteenth", sixteenth_notes)
         }
 
-        temp_files = [local_file_path]
         for key, (note_type, times) in time_map.items():
             out_filename = f"{name_only}_{key}.wav"
             out_path = os.path.join(UPLOAD_FOLDER, out_filename)
@@ -127,7 +129,6 @@ def process_audio_for_bpm(s3_file_path):
             sf.write(out_path, ticked_audio, sr)
             file_map[key] = out_filename
             temp_files.append(out_path)
-
 
         print("INFO: BPM and tick sounds processing complete.")
 
@@ -148,8 +149,8 @@ def process_audio_for_bpm(s3_file_path):
         import traceback
         traceback.print_exc()
         raise e
+
     finally:
-        # Clean up downloaded and generated files
         for f in temp_files:
             try:
                 if os.path.exists(f):
@@ -157,6 +158,7 @@ def process_audio_for_bpm(s3_file_path):
                     print(f"INFO: Deleted temporary file: {f}")
             except Exception as cleanup_err:
                 print(f"WARNING: Failed to delete {f}: {cleanup_err}", file=sys.stderr)
+
 
 
 # --- Flask Route for Local Development/Testing (Optional) ---
