@@ -55,6 +55,7 @@ def process_audio_for_bpm(s3_file_path):
         raise ValueError("S3 bucket or client not configured.")
 
     filename = os.path.basename(s3_file_path)
+    name_only = os.path.splitext(os.path.basename(s3_file_path))[0]
     local_file_path = os.path.join(UPLOAD_FOLDER, filename)
 
     try:
@@ -118,11 +119,15 @@ def process_audio_for_bpm(s3_file_path):
             "sixteenth_notes": ("sixteenth", sixteenth_notes)
         }
 
+        temp_files = [local_file_path]
         for key, (note_type, times) in time_map.items():
+            out_filename = f"{name_only}_{key}.wav"
+            out_path = os.path.join(UPLOAD_FOLDER, out_filename)
             ticked_audio = add_ticks(y.copy(), times, note_type)
-            out_path = os.path.join(UPLOAD_FOLDER, f"{key}.wav")
             sf.write(out_path, ticked_audio, sr)
-            file_map[key] = f"{key}.wav"
+            file_map[key] = out_filename
+            temp_files.append(out_path)
+
 
         print("INFO: BPM and tick sounds processing complete.")
 
@@ -145,7 +150,7 @@ def process_audio_for_bpm(s3_file_path):
         raise e
     finally:
         # Clean up downloaded and generated files
-        for f in [local_file_path] + [os.path.join(UPLOAD_FOLDER, f"{k}.wav") for k in time_map]:
+        for f in temp_files:
             try:
                 if os.path.exists(f):
                     os.remove(f)
@@ -169,6 +174,8 @@ def analyze_bpm_flask_route():
         print("WARNING: No 's3_file_path' provided in Flask request JSON.", file=sys.stderr)
         return jsonify({"error": "No 's3_file_path' provided in JSON"}), 400
 
+
+    
     s3_file_path = request.json["s3_file_path"]
     print(f"INFO: Flask received s3_file_path: {s3_file_path}")
 
